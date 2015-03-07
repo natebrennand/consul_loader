@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
 	"strings"
@@ -14,8 +15,8 @@ import (
 var (
 	kv       *consul.KV
 	srcKey   string
-	destKey  string
 	srcJSON  string
+	destKey  string
 	destJSON string
 )
 
@@ -33,15 +34,19 @@ func init() {
 	flag.StringVar(&srcJSON, "srcJSON", "", "file to import values from")
 	flag.StringVar(&destJSON, "destJSON", "", "file to export values to")
 	flag.Parse()
+
+	if (srcKey != "" && srcJSON != "") || (srcKey == "" && srcJSON == "") {
+		log.Fatal("Either the source key or JSON flag must utilized")
+	} else if (destKey != "" && destJSON != "") || (destKey == "" && destJSON == "") {
+		log.Fatal("Either the destination key or JSON flag must utilized")
+	}
 }
 
 // tree is a structure used to build a representation of the consul config.
 type tree map[string]interface{}
 
 // String returns a string representation of the Tree.
-func (t tree) String() string {
-	var repr string
-
+func (t tree) String() (repr string) {
 	for k, v := range t {
 		subTree, ok := v.(tree)
 		if ok {
@@ -50,9 +55,10 @@ func (t tree) String() string {
 			repr += fmt.Sprintf("%s: %s\n", k, v)
 		}
 	}
-	return repr
+	return
 }
 
+// add traverses the tree from the split key to find the proper place to put the value.
 func (t tree) add(k string, v interface{}) {
 	if k == "" {
 		return
@@ -76,26 +82,52 @@ func (t tree) add(k string, v interface{}) {
 // build adds a series of KVPairs to the tree.
 func (t tree) build(kvs consul.KVPairs) {
 	for _, pair := range kvs {
-		t.add(pair.Key, string(pair.Value))
+		// jank
+		if destJSON != "" {
+			t.add(pair.Key, string(pair.Value))
+		} else {
+			t.add(pair.Key, pair.Value)
+		}
+	}
+}
+
+func (t tree) update(base string) {
+	for k, v := range t {
+		subTree, ok := v.(tree)
+		if ok {
+			subTree.update(base + "/" + k)
+		} else {
+			log.Printf("%s => %s", base+"/"+k, string(v.([]byte)))
+			_, err := kv.Put(&consul.KVPair{
+				Key:   (base + "/" + k)[1:],
+				Value: v.([]byte),
+			}, nil)
+			if err != nil {
+				log.Fatalf("Failed to write to Consul => {%s}", err)
+			}
+		}
 	}
 }
 
 func main() {
 	values := tree{}
 
-	// try to find values in file
+	// 1. find the input data from either a file or Consul key
 	if srcJSON != "" {
+		// open and read file data
 		file, err := os.Open(srcJSON)
 		if err != nil {
 			log.Printf("Failed to open srcJSON file => {%s}", err)
 		}
 
+		// write data into tree
 		decoder := json.NewDecoder(file)
 		err = decoder.Decode(&values)
 		if err != nil {
 			log.Printf("Failed to decode json in file => {%s}", err)
 		}
-	} else { // try to find values in key given, else take all values
+	} else {
+		// try to find values in key given, else take all values
 		pairs, _, err := kv.List(srcKey, &consul.QueryOptions{})
 		if err != nil {
 			log.Fatalf("Error retrieving data for specified key, %s => {%s}", srcKey, err)
@@ -106,14 +138,29 @@ func main() {
 		values.build(pairs)
 	}
 
-	data, err := json.Marshal(values)
-	if err != nil {
-		log.Fatalf("Error marshaling data for JSON => {%s}", err)
+	// 2. write the src data to the destination
+	if destJSON != "" {
+		// write retrieved data to a file
+
+		// marshal data retrieved into JSON
+		data, err := json.Marshal(values)
+		if err != nil {
+			log.Fatalf("Error marshaling data for JSON => {%s}", err)
+		}
+
+		err = ioutil.WriteFile(destJSON, data, os.ModePerm)
+		if err != nil {
+			log.Fatalf("Failed to write json data to file, %s => {%s}", destJSON, err)
+		}
+	} else {
+		for _, v := range values {
+			subTree, ok := v.(tree)
+			if ok {
+				// push retrieved data to a Consul key
+				subTree.update("/" + destKey)
+			} else {
+				log.Fatal("Consul Loader does not support root level keys")
+			}
+		}
 	}
-
-	fmt.Println(string(data))
-	fmt.Println(values)
-
-	// TODO: add dest stuff
-	// TODO: decode the values
 }
