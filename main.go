@@ -19,6 +19,7 @@ var (
 	destJSON string
 )
 
+// init handles connecting to the Consul instance and reading in the flags.
 func init() {
 	// NOTE: this will utilize CONSUL_HTTP_ADDR if it is set.
 	client, err := consul.NewClient(consul.DefaultConfig())
@@ -34,8 +35,10 @@ func init() {
 	flag.Parse()
 }
 
+// tree is a structure used to build a representation of the consul config.
 type tree map[string]interface{}
 
+// String returns a string representation of the Tree.
 func (t tree) String() string {
 	var repr string
 
@@ -70,9 +73,10 @@ func (t tree) add(k string, v interface{}) {
 	}
 }
 
+// build adds a series of KVPairs to the tree.
 func (t tree) build(kvs consul.KVPairs) {
 	for _, pair := range kvs {
-		t.add(pair.Key, pair.Value)
+		t.add(pair.Key, string(pair.Value))
 	}
 }
 
@@ -108,6 +112,7 @@ func main() {
 	}
 
 	fmt.Println(string(data))
+	fmt.Println(values)
 
 	// TODO: add dest stuff
 	// TODO: decode the values
