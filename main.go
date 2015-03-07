@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 
 	consul "github.com/hashicorp/consul/api"
@@ -91,16 +92,33 @@ func (t tree) build(kvs consul.KVPairs) {
 	}
 }
 
+func resolveBytes(v interface{}) []byte {
+	switch val := v.(type) {
+	case []byte:
+		return val
+	case string:
+		return []byte(val)
+	case int:
+		return []byte(strconv.Itoa(val))
+	default:
+		log.Fatal("Unsupported type, please file an issue")
+	}
+
+	return []byte{}
+}
+
 func (t tree) update(base string) {
 	for k, v := range t {
-		subTree, ok := v.(tree)
+		subTree, ok := v.(map[string]interface{})
 		if ok {
-			subTree.update(base + "/" + k)
+			tree(subTree).update(base + "/" + k)
 		} else {
-			log.Printf("%s => %s", base+"/"+k, string(v.([]byte)))
+			val := resolveBytes(v)
+
+			log.Printf("%s => %s", base+"/"+k, val)
 			_, err := kv.Put(&consul.KVPair{
 				Key:   (base + "/" + k)[1:],
-				Value: v.([]byte),
+				Value: val,
 			}, nil)
 			if err != nil {
 				log.Fatalf("Failed to write to Consul => {%s}", err)
@@ -126,6 +144,8 @@ func main() {
 		if err != nil {
 			log.Printf("Failed to decode json in file => {%s}", err)
 		}
+
+		log.Printf("%#v", values)
 	} else {
 		// try to find values in key given, else take all values
 		pairs, _, err := kv.List(srcKey, &consul.QueryOptions{})
@@ -154,10 +174,10 @@ func main() {
 		}
 	} else {
 		for _, v := range values {
-			subTree, ok := v.(tree)
+			subTree, ok := v.(map[string]interface{})
 			if ok {
 				// push retrieved data to a Consul key
-				subTree.update("/" + destKey)
+				tree(subTree).update("/" + destKey)
 			} else {
 				log.Fatal("Consul Loader does not support root level keys")
 			}
