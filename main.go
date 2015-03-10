@@ -97,15 +97,19 @@ func readConsulTree(key string) tree {
 
 // putConsulTree adds a config tree to a consul KV store at the specified key.
 func putConsulTree(t tree, key string) {
-	for _, v := range t {
-		subTree, ok := v.(map[string]interface{})
-		if ok {
-			// push retrieved data to a Consul key
-			tree(subTree).update("/" + key)
-		} else {
-			log.Fatal("Consul Loader does not support root level keys")
+	t.update("/" + key)
+
+	/*
+		for _, v := range t {
+			subTree, ok := v.(map[string]interface{})
+			if ok {
+				// push retrieved data to a Consul key
+				tree(subTree).update("/" + key)
+			} else {
+				log.Fatal("Consul Loader does not support root level keys")
+			}
 		}
-	}
+	*/
 }
 
 func main() {

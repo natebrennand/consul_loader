@@ -3,9 +3,12 @@ go: 1.2
 before_install:
   - go get code.google.com/p/go.tools/cmd/vet
   - go get github.com/golang/lint/golint
+  - wget 'https://dl.bintray.com/mitchellh/consul/0.4.1_linux_amd64.zip'
+  - unzip "0.4.1_linux_amd64.zip"
 install:
   - go get -d -v -t ./...
 script:
+  - ../consul agent -server -bootstrap-expect 1 -data-dir /tmp/consul &
   - go test ./...
   - go vet ./...
   - $HOME/gopath/bin/golint **/*.go

@@ -12,13 +12,22 @@ import (
 )
 
 var (
-	testTree = tree(map[string]interface{}{
+	consulKey = "_test_"
+	testTree  = tree{
 		"key1": float64(1),
 		"key2": float64(2),
 		"subtree": map[string]interface{}{
 			"key3": float64(3),
 		},
-	})
+	}
+	testTreeString = tree{
+		"key1": "1",
+		"key2": "2",
+		"subtree": tree{
+			"key3": "3",
+		},
+	}
+
 	expectedJSON = `{"key1":1,"key2":2,"subtree":{"key3":3}}`
 )
 
@@ -44,7 +53,19 @@ func TestWriteJSONFile(t *testing.T) {
 // diffTree compares two nested trees
 func diffTree(a, b tree, t *testing.T) {
 	for k, v := range a {
-		if subtree, isTree := v.(map[string]interface{}); isTree {
+		if subtree, isTree := v.(tree); isTree {
+			val, valid := b[k]
+			if !valid {
+				t.Fatalf("Read tree missing key, %s", k)
+			}
+
+			subtreeB, valid := val.(tree)
+			if !valid {
+				t.Fatalf("Read tree missing subtree, %s", k)
+			}
+
+			diffTree(subtree, subtreeB, t)
+		} else if subtree, isTree := v.(map[string]interface{}); isTree {
 			val, valid := b[k]
 			if !valid {
 				t.Fatalf("Read tree missing key, %s", k)
@@ -77,4 +98,15 @@ func TestReadJSONFile(t *testing.T) {
 
 	loadedTree := readJSONFile(tmpFile)
 	diffTree(testTree, loadedTree, t)
+}
+
+func TestConsulIntegration(t *testing.T) {
+	// try to push the key into consul
+	putConsulTree(testTree, consulKey)
+
+	// try to grab the values from it
+	destJSON = " "
+	vals := readConsulTree(consulKey)
+
+	diffTree(tree{consulKey: testTreeString}, vals, t)
 }

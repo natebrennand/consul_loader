@@ -73,6 +73,10 @@ func resolveBytes(v interface{}) []byte {
 		return val
 	case string:
 		return []byte(val)
+	case int64:
+		return []byte(strconv.FormatInt(val, 10))
+	case float64:
+		return []byte(strconv.FormatInt(int64(val), 10))
 	case int:
 		return []byte(strconv.Itoa(val))
 	default:
@@ -82,7 +86,7 @@ func resolveBytes(v interface{}) []byte {
 	return []byte{}
 }
 
-// update pushes a Consul config tree into a new provided key. The update is
+// update pushes a tree into a new provided key within Consul. The update is
 // performed recursively through the tree.
 func (t tree) update(base string) {
 	for k, v := range t {
