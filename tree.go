@@ -26,23 +26,27 @@ func (t tree) String() (repr string) {
 }
 
 // add traverses the tree from the split key to find the proper place to put the value.
+// A trie is built up from the keys for easy conversion to JSON.
 func (t tree) add(k string, v interface{}) {
+	// error if there is no key
 	if k == "" {
 		return
 	}
 
+	// split the key by segments to allow building a trie
 	path := strings.Split(k, "/")
 
-	if len(path) == 1 {
+	if len(path) == 1 { // on the last key portion
 		t[k] = v
 	} else {
 		subKey := path[0]
 		subTree, exists := t[subKey]
 		if !exists {
 			t[subKey] = tree{}
-			subTree = t[subKey]
+			subTree = t[subKey] // make a reference to the subtree
 		}
 
+		// insert the value at the last brnach of the trie
 		subTree.(tree).add(strings.Join(path[1:], "/"), v)
 	}
 }
@@ -51,14 +55,18 @@ func (t tree) add(k string, v interface{}) {
 func (t tree) build(kvs consul.KVPairs) {
 	for _, pair := range kvs {
 		// jank
+		// use string values if the destination is a JSON file
 		if destJSON != "" {
 			t.add(pair.Key, string(pair.Value))
 		} else {
+			// use raw bytes if transferring from Consul key to Consul key
 			t.add(pair.Key, pair.Value)
 		}
 	}
 }
 
+// resolveBytes is a helper method to translate a byte array to
+// a primitive type.
 func resolveBytes(v interface{}) []byte {
 	switch val := v.(type) {
 	case []byte:
@@ -74,17 +82,20 @@ func resolveBytes(v interface{}) []byte {
 	return []byte{}
 }
 
+// update pushes a Consul config tree into a new provided key. The update is
+// performed recursively through the tree.
 func (t tree) update(base string) {
 	for k, v := range t {
+		// leaf or tree
 		subTree, ok := v.(map[string]interface{})
 		if ok {
+			// update the sub tree
 			tree(subTree).update(base + "/" + k)
 		} else {
+			// update the leaf
 			val := resolveBytes(v)
-
-			log.Printf("%s => %s", base+"/"+k, val)
 			_, err := kv.Put(&consul.KVPair{
-				Key:   (base + "/" + k)[1:],
+				Key:   (base + "/" + k)[1:], // build the new key
 				Value: val,
 			}, nil)
 			if err != nil {
