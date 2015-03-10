@@ -32,7 +32,9 @@ func init() {
 	flag.StringVar(&srcJSON, "srcJSON", "", "file to import values from")
 	flag.StringVar(&destJSON, "destJSON", "", "file to export values to")
 	flag.Parse()
+}
 
+func normalizeArgs() {
 	if (srcKey != "" && srcJSON != "") || (srcKey == "" && srcJSON == "") {
 		log.Fatal("Either the source key or JSON flag must utilized")
 	} else if (destKey != "" && destJSON != "") || (destKey == "" && destJSON == "") {
@@ -40,60 +42,87 @@ func init() {
 	}
 }
 
+// readJSONFile constructs a tree from a specifed JSON file. The function exits if the
+// file is not found.
+func readJSONFile(filename string) tree {
+	values := tree{}
+
+	// open and read file data
+	file, err := os.Open(filename)
+	if err != nil {
+		log.Printf("Failed to open srcJSON file => {%s}", err)
+	}
+
+	// write data into tree
+	decoder := json.NewDecoder(file)
+	err = decoder.Decode(&values)
+	if err != nil {
+		log.Printf("Failed to decode json in file => {%s}", err)
+	}
+
+	return values
+}
+
+// writeJSONFile writes retrieved data to a file.
+func writeJSONFile(t tree, filename string) {
+	// marshal data retrieved into JSON
+	data, err := json.Marshal(t)
+	if err != nil {
+		log.Fatalf("Error marshaling data for JSON => {%s}", err)
+	}
+
+	// write data into file
+	err = ioutil.WriteFile(destJSON, data, os.ModePerm)
+	if err != nil {
+		log.Fatalf("Failed to write json data to file, %s => {%s}", destJSON, err)
+	}
+}
+
+// readConsulTree constructs a tree from the Consul KV store at the specified key.
+func readConsulTree(key string) tree {
+	values := tree{}
+
+	// try to find values in key given, else take all values
+	pairs, _, err := kv.List(srcKey, &consul.QueryOptions{})
+	if err != nil {
+		log.Fatalf("Error retrieving data for specified key, %s => {%s}", srcKey, err)
+	} else if len(pairs) == 0 {
+		log.Fatalf("Failed to find any data, %s", srcKey)
+	}
+
+	values.build(pairs)
+
+	return values
+}
+
+// putConsulTree adds a config tree to a consul KV store at the specified key.
+func putConsulTree(t tree, key string) {
+	for _, v := range t {
+		subTree, ok := v.(map[string]interface{})
+		if ok {
+			// push retrieved data to a Consul key
+			tree(subTree).update("/" + key)
+		} else {
+			log.Fatal("Consul Loader does not support root level keys")
+		}
+	}
+}
+
 func main() {
 	values := tree{}
+	normalizeArgs()
 
 	// 1. find the input data from either a file or Consul key
 	if srcJSON != "" {
-		// open and read file data
-		file, err := os.Open(srcJSON)
-		if err != nil {
-			log.Printf("Failed to open srcJSON file => {%s}", err)
-		}
-
-		// write data into tree
-		decoder := json.NewDecoder(file)
-		err = decoder.Decode(&values)
-		if err != nil {
-			log.Printf("Failed to decode json in file => {%s}", err)
-		}
-
-		log.Printf("%#v", values)
+		values = readJSONFile(srcJSON)
 	} else {
-		// try to find values in key given, else take all values
-		pairs, _, err := kv.List(srcKey, &consul.QueryOptions{})
-		if err != nil {
-			log.Fatalf("Error retrieving data for specified key, %s => {%s}", srcKey, err)
-		} else if len(pairs) == 0 {
-			log.Fatalf("Failed to find any data, %s", srcKey)
-		}
-
-		values.build(pairs)
+		values = readConsulTree(srcKey)
 	}
 
 	// 2. write the src data to the destination
 	if destJSON != "" {
-		// write retrieved data to a file
-
-		// marshal data retrieved into JSON
-		data, err := json.Marshal(values)
-		if err != nil {
-			log.Fatalf("Error marshaling data for JSON => {%s}", err)
-		}
-
-		err = ioutil.WriteFile(destJSON, data, os.ModePerm)
-		if err != nil {
-			log.Fatalf("Failed to write json data to file, %s => {%s}", destJSON, err)
-		}
+		writeJSONFile(values, destJSON)
 	} else {
-		for _, v := range values {
-			subTree, ok := v.(map[string]interface{})
-			if ok {
-				// push retrieved data to a Consul key
-				tree(subTree).update("/" + destKey)
-			} else {
-				log.Fatal("Consul Loader does not support root level keys")
-			}
-		}
+		putConsulTree(values, destKey)
 	}
 }
