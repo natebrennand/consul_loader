@@ -72,7 +72,7 @@ func writeJSONFile(t tree, filename string) {
 	}
 
 	// write data into file
-	err = ioutil.WriteFile(destJSON, data, os.ModePerm)
+	err = ioutil.WriteFile(filename, data, os.ModePerm)
 	if err != nil {
 		log.Fatalf("Failed to write json data to file, %s => {%s}", destJSON, err)
 	}
