@@ -1,0 +1,11 @@
+{
+	"ImportPath": "github.com/natebrennand/consul_loader",
+	"GoVersion": "go1.3.1",
+	"Deps": [
+		{
+			"ImportPath": "github.com/hashicorp/consul/api",
+			"Comment": "v0.5.0-69-g82c9c55",
+			"Rev": "82c9c553e53c959987645e69c00e723bdb8acb64"
+		}
+	]
+}
