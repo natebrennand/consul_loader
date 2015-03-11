@@ -80,6 +80,7 @@ func resolveBytes(v interface{}) []byte {
 	case int:
 		return []byte(strconv.Itoa(val))
 	default:
+		log.Printf("interface: %#v", v)
 		log.Fatal("Unsupported type, please file an issue")
 	}
 
@@ -90,21 +91,28 @@ func resolveBytes(v interface{}) []byte {
 // performed recursively through the tree.
 func (t tree) update(base string) {
 	for k, v := range t {
-		// leaf or tree
-		subTree, ok := v.(map[string]interface{})
+		subMap, ok := v.(map[string]interface{})
+		if ok {
+			// update the sub tree
+			tree(subMap).update(base + "/" + k)
+			continue
+		}
+
+		subTree, ok := v.(tree)
 		if ok {
 			// update the sub tree
 			tree(subTree).update(base + "/" + k)
-		} else {
-			// update the leaf
-			val := resolveBytes(v)
-			_, err := kv.Put(&consul.KVPair{
-				Key:   (base + "/" + k)[1:], // build the new key
-				Value: val,
-			}, nil)
-			if err != nil {
-				log.Fatalf("Failed to write to Consul => {%s}", err)
-			}
+			continue
+		}
+
+		// update the leaf
+		val := resolveBytes(v)
+		_, err := kv.Put(&consul.KVPair{
+			Key:   (base + "/" + k)[1:], // build the new key
+			Value: val,
+		}, nil)
+		if err != nil {
+			log.Fatalf("Failed to write to Consul => {%s}", err)
 		}
 	}
 }
