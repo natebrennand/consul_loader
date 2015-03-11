@@ -1,14 +1,14 @@
 language: go
 env:
-  - CONSUL_URL=https://dl.bintray.com/mitchellh/consul/0.4.1_linux_amd64.zip
-  - CONSUL_URL=https://dl.bintray.com/mitchellh/consul/0.5.1_linux_amd64.zip
+  - CONSUL_V=0.4.1
+  - CONSUL_V=0.5.0
 go: 1.4
 before_install:
   - go get golang.org/x/tools/cmd/vet
   - go get github.com/golang/lint/golint
   - go get github.com/tools/godep
-  - wget "$CONSUL_URL"
-  - unzip "0.4.1_linux_amd64.zip"
+  - wget "https://dl.bintray.com/mitchellh/consul/${CONSUL_V}_linux_amd64.zip"
+  - unzip "${CONSUL_V}_linux_amd64.zip"
 script:
   - ./consul agent -server -bootstrap-expect 1 -data-dir /tmp/consul &
   - sleep 5  # sleep while it starts up
