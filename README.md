@@ -10,7 +10,7 @@ This allows for easy transfer of configurations as well as easier editing contro
 Consul is very friendly but can be tedious to rename large sets of keys.
 
 
-Tested with Consul 4.1 & 5.1.
+Tested with Consul 0.4.1 & 0.5.1.
 
 
 NOTE: when exporting to JSON, all values will be in a string format.
