@@ -52,16 +52,10 @@ func (t tree) add(k string, v interface{}) {
 }
 
 // build adds a series of KVPairs to the tree.
-func (t tree) build(kvs consul.KVPairs) {
+func (t tree) build(kvs consul.KVPairs, skip int) {
 	for _, pair := range kvs {
-		// jank
-		// use string values if the destination is a JSON file
-		if destJSON != "" {
-			t.add(pair.Key, string(pair.Value))
-		} else {
-			// use raw bytes if transferring from Consul key to Consul key
-			t.add(pair.Key, pair.Value)
-		}
+		// use raw bytes if transferring from Consul key to Consul key
+		t.add(pair.Key[skip:], string(pair.Value))
 	}
 }
 

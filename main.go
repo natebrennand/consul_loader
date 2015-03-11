@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"path"
 
 	consul "github.com/hashicorp/consul/api"
 )
@@ -92,7 +93,11 @@ func readConsulTree(key string) tree {
 		log.Fatalf("Failed to find any data, %s", srcKey)
 	}
 
-	values.build(pairs)
+	// determine how many characters from the start of the key to skip
+	base := path.Base(key)
+	skip := len(key) - len(base)
+
+	values.build(pairs, skip)
 
 	return values
 }

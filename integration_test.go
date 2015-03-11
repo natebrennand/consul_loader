@@ -93,7 +93,6 @@ func TestConsulIntegration(t *testing.T) {
 	putConsulTree(testTree, consulKey)
 
 	// try to grab the values from it
-	destJSON = " "
 	vals := readConsulTree(consulKey)
 
 	diffTree(tree{consulKey: map[string]interface{}(testTreeString)}, vals, t)
