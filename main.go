@@ -16,6 +16,7 @@ var (
 	srcJSON  string
 	destKey  string
 	destJSON string
+	rename   bool
 )
 
 // init handles connecting to the Consul instance and reading in the flags.
@@ -31,6 +32,7 @@ func init() {
 	flag.StringVar(&destKey, "destKey", "", "key to move values to")
 	flag.StringVar(&srcJSON, "srcJSON", "", "file to import values from")
 	flag.StringVar(&destJSON, "destJSON", "", "file to export values to")
+	flag.BoolVar(&rename, "rename", false, "place as a rename instead of a insertion")
 	flag.Parse()
 }
 
@@ -97,7 +99,20 @@ func readConsulTree(key string) tree {
 
 // putConsulTree adds a config tree to a consul KV store at the specified key.
 func putConsulTree(t tree, key string) {
-	t.update("/" + key)
+	if !rename {
+		t.update("/" + key)
+		return
+	}
+
+	for k, v := range t {
+		subTree, ok := v.(map[string]interface{})
+		if ok {
+			// push retrieved data to a Consul key
+			tree(subTree).update("/" + key)
+		} else {
+			push(key+"/"+k, v)
+		}
+	}
 }
 
 func main() {

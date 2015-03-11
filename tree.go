@@ -15,9 +15,9 @@ type tree map[string]interface{}
 // String returns a string representation of the Tree.
 func (t tree) String() (repr string) {
 	for k, v := range t {
-		subTree, ok := v.(tree)
+		subTree, ok := v.(map[string]interface{})
 		if ok {
-			repr += fmt.Sprintf("%s: {%s},\n", k, subTree.String())
+			repr += fmt.Sprintf("%s: {%s},\n", k, tree(subTree).String())
 		} else {
 			repr += fmt.Sprintf("%s: %s\n", k, v)
 		}
@@ -42,12 +42,12 @@ func (t tree) add(k string, v interface{}) {
 		subKey := path[0]
 		subTree, exists := t[subKey]
 		if !exists {
-			t[subKey] = tree{}
+			t[subKey] = map[string]interface{}{}
 			subTree = t[subKey] // make a reference to the subtree
 		}
 
 		// insert the value at the last brnach of the trie
-		subTree.(tree).add(strings.Join(path[1:], "/"), v)
+		tree(subTree.(map[string]interface{})).add(strings.Join(path[1:], "/"), v)
 	}
 }
 
@@ -91,28 +91,26 @@ func resolveBytes(v interface{}) []byte {
 // performed recursively through the tree.
 func (t tree) update(base string) {
 	for k, v := range t {
+		key := base + "/" + k
 		subMap, ok := v.(map[string]interface{})
 		if ok {
 			// update the sub tree
-			tree(subMap).update(base + "/" + k)
-			continue
-		}
-
-		subTree, ok := v.(tree)
-		if ok {
-			// update the sub tree
-			tree(subTree).update(base + "/" + k)
+			tree(subMap).update(key)
 			continue
 		}
 
 		// update the leaf
-		val := resolveBytes(v)
-		_, err := kv.Put(&consul.KVPair{
-			Key:   (base + "/" + k)[1:], // build the new key
-			Value: val,
-		}, nil)
-		if err != nil {
-			log.Fatalf("Failed to write to Consul => {%s}", err)
-		}
+		push(key[1:], v)
+	}
+}
+
+func push(key string, v interface{}) {
+	val := resolveBytes(v)
+	_, err := kv.Put(&consul.KVPair{
+		Key:   key,
+		Value: val,
+	}, nil)
+	if err != nil {
+		log.Fatalf("Failed to write to Consul => {%s}", err)
 	}
 }
