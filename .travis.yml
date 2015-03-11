@@ -3,14 +3,13 @@ go: 1.2
 before_install:
   - go get code.google.com/p/go.tools/cmd/vet
   - go get github.com/golang/lint/golint
+  - go get github.com/tools/godep
   - wget 'https://dl.bintray.com/mitchellh/consul/0.4.1_linux_amd64.zip'
   - unzip "0.4.1_linux_amd64.zip"
-install:
-  - go get -d -v -t ./...
 script:
   - ./consul agent -server -bootstrap-expect 1 -data-dir /tmp/consul &
   - sleep 5
-  - go test  -tags integration
+  - godep go test  -tags integration
   - go vet ./...
   - $HOME/gopath/bin/golint **/*.go
   - LINTED=$($HOME/gopath/bin/golint **/*.go| wc -l); if [ $LINTED -gt 0 ]; then echo "golint - $LINTED statements not up to spec, please run golint and follow the suggestions." && exit 1; fi
